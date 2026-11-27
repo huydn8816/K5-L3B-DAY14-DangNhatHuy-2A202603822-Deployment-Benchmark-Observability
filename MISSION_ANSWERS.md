@@ -1,7 +1,5 @@
 # Day 14 Lab — Mission Answers
 
-> Ghi chú: mục nào có `⏳ BẠN ĐIỀN` là phần cần Docker hoặc cloud nên phải tự chạy và dán kết quả thật. Xoá dòng ghi chú này trước khi nộp.
-
 ## Part 1: Localhost vs Production
 
 ### Exercise 1.1: Anti-patterns trong `01-localhost-vs-production/develop/app.py`
@@ -62,7 +60,23 @@ Quan sát: nó chạy, nhưng `question` là query param nên gửi JSON bị 42
 
 ### Exercise 2.2: Build và chạy bản develop
 
-⏳ BẠN ĐIỀN: dán lệnh `docker build -f 02-docker/develop/Dockerfile -t my-agent:develop .` (chạy từ gốc repo), kết quả `curl "http://localhost:8000/ask?question=What is Docker?" -X POST` và `docker images my-agent:develop`.
+Chạy từ gốc repo (đo trong WSL2, Docker 29.10.1):
+
+```
+$ docker build -f 02-docker/develop/Dockerfile -t my-agent:develop .
+$ docker run -d --rm --name p2dev -p 18020:8000 my-agent:develop
+$ curl -i -X POST "http://localhost:18020/ask?question=What%20is%20Docker%3F"
+HTTP/1.1 200 OK
+{"answer":"Container là cách đóng gói app để chạy ở mọi nơi. Build once, run anywhere!"}
+```
+
+(Dùng cổng 18020 vì cổng 8000 trên máy đang có tiến trình khác.)
+
+```
+$ docker images | grep my-agent
+my-agent:develop     0f3d77d5f0d1   1.67GB   (content size 426MB)
+my-agent:advanced    9405e79d12db   240MB    (content size 57.4MB)
+```
 
 ### Exercise 2.3: Multi-stage (`02-docker/production/Dockerfile`)
 
@@ -74,9 +88,9 @@ Kích thước image (đo bằng `docker images`):
 
 | Image | Kích thước |
 |---|---|
-| `my-agent:develop` | ⏳ BẠN ĐIỀN MB |
-| `my-agent:advanced` | ⏳ BẠN ĐIỀN MB |
-| Chênh lệch | ⏳ BẠN ĐIỀN % |
+| `my-agent:develop` | 1670 MB (1.67 GB, cột DISK USAGE của `docker images`; content size 426 MB) |
+| `my-agent:advanced` | 240 MB (content size 57.4 MB) |
+| Chênh lệch | giảm khoảng **85.6%** theo DISK USAGE: (1670 − 240) / 1670. Theo content size: giảm khoảng 86.5% (426 → 57.4 MB) |
 
 ### Exercise 2.4: Docker Compose stack (`02-docker/production/docker-compose.yml`)
 
@@ -93,14 +107,26 @@ Client ──80/443──▶ nginx ──▶ agent:8000 ──▶ redis:6379
 - `qdrant` (v1.9.0): vector database cho RAG, có volume `qdrant_data`.
 - `agent` chỉ khởi động khi `redis` và `qdrant` đã `service_healthy` (`depends_on` + `condition`).
 
-⏳ BẠN ĐIỀN: kết quả `curl http://localhost/health` và `curl http://localhost/ask -X POST ...` qua Nginx (nhớ `touch .env.local` trong `02-docker/production/`).
+Đã chạy `docker compose -p k5-day14-docker up -d --build` trong `02-docker/production/` (sau `touch .env.local`). Cả 4 service lên: `redis` và `qdrant` ở trạng thái `healthy` trước, rồi `agent`, rồi `nginx` (đúng thứ tự `depends_on`), chỉ `nginx` mở cổng ra ngoài (`0.0.0.0:80->80`, `443`).
+
+```
+$ curl -i http://localhost/health
+HTTP/1.1 200 OK
+{"status":"ok","uptime_seconds":0.5,"version":"2.0.0","timestamp":"2026-11-26T10:40:33.194570"}
+
+$ curl -i http://localhost/ask -X POST -H "Content-Type: application/json" -d '{"question":"Explain microservices"}'
+HTTP/1.1 200 OK
+{"answer":"Agent đang hoạt động tốt! (mock response) Hỏi thêm câu hỏi đi nhé."}
+```
+
+Sau đó đã `docker compose -p k5-day14-docker down`.
 
 ## Part 3: Cloud Deployment
 
 ### Exercise 3.1 / 3.2: Deploy agent Part 6
 
-- Nền tảng: ⏳ BẠN ĐIỀN (Railway hoặc Render)
-- URL public: ⏳ BẠN ĐIỀN
+- Nền tảng: Render (Blueprint `06-lab-complete/render.yaml`, gói free, web service Docker + Redis)
+- URL public: https://ai-agent-iuyb.onrender.com
 - Ảnh: `screenshots/dashboard.png`, `screenshots/running.png`, `screenshots/test.png`
 - Chi tiết xem `DEPLOYMENT.md`.
 
@@ -194,7 +220,23 @@ retry-after: 58
 
 Bản develop (`05-scaling-reliability/develop/app.py`): middleware đếm `_in_flight_requests`; khi nhận SIGTERM, uvicorn ngừng nhận kết nối mới, chạy phần sau `yield` của `lifespan`, đặt `_is_ready=False` rồi chờ tối đa 30 giây cho đến khi số request đang chạy về 0; `uvicorn.run(..., timeout_graceful_shutdown=30)` cho phép chờ. Ở Part 6 tôi không tự đăng ký handler SIGTERM mà dựa vào cơ chế sẵn có của uvicorn (tự đăng ký mà không gọi lại handler cũ thì process sẽ không bao giờ tắt).
 
-⏳ BẠN ĐIỀN: kết quả bạn tự chạy test (`python app.py &`, gửi request, `kill -TERM $PID`) và quan sát request có hoàn thành không. Cần chạy trong WSL/Ubuntu vì Windows không gửi được SIGTERM như vậy.
+Đã chạy trong WSL2 (`PORT=18030 python app.py`), gửi `POST /ask` rồi gửi `kill -TERM` ngay sau đó (cách nhau khoảng 30 ms):
+
+```
+[request result] HTTP 200
+{"answer":"Tôi là AI agent được deploy lên cloud. Câu hỏi của bạn đã được nhận."}
+[server exit code] 0
+
+INFO:     Shutting down
+INFO:     127.0.0.1:53022 - "POST /ask?question=Long%20task HTTP/1.1" 200 OK
+INFO:     Waiting for application shutdown.
+INFO ... 🔄 Graceful shutdown initiated...
+INFO ... ✅ Shutdown complete
+INFO:     Finished server process
+INFO ... Received signal 15 — uvicorn will handle graceful shutdown
+```
+
+Quan sát: request đang xử lý vẫn trả **200** dù SIGTERM đã đến (log `Shutting down` xuất hiện trước dòng 200 OK của request), sau đó mới chạy phần shutdown của `lifespan` và process thoát với exit code **0**. Lưu ý: mock LLM chỉ ngủ khoảng 0.1 giây nên request rất ngắn; thử nghiệm này xác nhận thứ tự shutdown nhưng chưa thử với request chạy lâu.
 
 ### Exercise 5.3: Stateless
 
@@ -202,20 +244,58 @@ Bản develop (`05-scaling-reliability/develop/app.py`): middleware đếm `_in_
 
 ### Exercise 5.4 / 5.5: Load balancing và test stateless
 
-⏳ BẠN ĐIỀN: chạy trong `05-scaling-reliability/production/` (cần `touch .env.local`):
+Đã chạy trong `05-scaling-reliability/production/` (sau `touch .env.local`):
 
 ```
 docker compose -p k5-day14-scaling up -d --build --scale agent=3
 python test_stateless.py
-docker compose -p k5-day14-scaling logs agent
 docker compose -p k5-day14-scaling down
 ```
 
-Dán output của `test_stateless.py` (các `served_by` khác nhau, history đủ 10 message) và giải thích: request đi qua nhiều instance nhưng history vẫn liền mạch vì state nằm ở Redis.
+`docker compose ps` thấy 3 container `agent` đều `healthy`, cùng `nginx` và `redis`. Output của `test_stateless.py`:
+
+```
+Session ID: c839f5e1-3eea-44a1-9b6b-246b7c257a71
+Request 1: [instance-eaf066]  Q: What is Docker?
+Request 2: [instance-d83ed8]  Q: Why do we need containers?
+Request 3: [instance-f66bb2]  Q: What is Kubernetes?
+Request 4: [instance-eaf066]  Q: How does load balancing work?
+Request 5: [instance-d83ed8]  Q: What is Redis used for?
+Total requests: 5
+Instances used: {'instance-d83ed8', 'instance-eaf066', 'instance-f66bb2'}
+✅ All requests served despite different instances!
+--- Conversation History ---
+Total messages: 10
+✅ Session history preserved across all instances via Redis!
+```
+
+5 request trong **cùng một session** được 3 instance khác nhau phục vụ (Nginx chia vòng), nhưng history vẫn liền mạch đủ 10 message (5 câu hỏi + 5 câu trả lời), vì session lưu ở Redis chứ không nằm trong RAM của instance nào. Đó là điều kiện để scale ngang.
+
+Lưu ý trung thực: trong **lần chạy đầu tiên**, `POST /chat` qua Nginx trả `502 Bad Gateway` dù `/health` đã 200, và `test_stateless.py` dừng ở request 1. Sau khi bật lại stack, 6 request `/chat` liên tiếp đều 200 và test chạy đủ. Tôi chưa xác định chắc nguyên nhân của lần 502 đó (có thể do vừa khởi động, Nginx chưa kết nối được tới các instance), nên chỉ ghi lại hiện tượng.
 
 ## Part 6: Final Project
 
-⏳ BẠN ĐIỀN: sau khi hoàn tất Dockerfile, docker-compose, `.dockerignore`, `railway.toml`/`render.yaml`, chạy `python check_production_ready.py` (trong WSL2, có Docker, đầy đủ không có cờ nào) và dán phần "📋 Checklist Deliverable" vào đây. Phải là `PASS 12/12`.
+Kết quả `python check_production_ready.py` (bản đầy đủ, chạy trong WSL2, có Docker):
+
+```
+📋 Checklist Deliverable
+   ✅ Dockerfile (multi-stage, < 500 MB)
+   ✅ docker-compose.yml (agent + redis)
+   ✅ .dockerignore
+   ✅ Health check endpoint (GET /health)
+   ✅ Readiness endpoint (GET /ready)
+   ✅ API Key authentication
+   ✅ Rate limiting
+   ✅ Cost guard
+   ✅ Config từ environment variables
+   ✅ Structured logging
+   ✅ Graceful shutdown
+   ✅ Public URL ready (Railway / Render config)
+Result: 12/12 tiêu chí đạt · 42/42 checks passed
+🎉 PASS 12/12 — PRODUCTION READY!
+```
+
+Một số số đo từ lần chạy này: image `06-lab-complete` là **297 MB** (< 500 MB), build 2 giây (có cache), `docker stop` thoát với exit code 0 trong 0.8 giây, rate limit trả 429 sau 5 request thành công (`RATE_LIMIT_PER_MINUTE=5`) và vẫn 429 sau khi restart agent (state nằm trong Redis), 17 dòng log đều là JSON hợp lệ.
 
 ### Quyết định thiết kế trong `06-lab-complete/app/`
 
@@ -228,13 +308,26 @@ Dán output của `test_stateless.py` (các `served_by` khác nhau, history đ�
 
 ## AI log
 
-Theo `RULES.md` mục 1, đây là phần ghi lại việc dùng AI (Claude Code) trong bài này.
+Theo `RULES.md` mục 1, đây là phần ghi lại việc dùng AI (Claude Code) trong bài này: hỏi gì, nhận gì, ai kiểm tra thế nào.
 
-| Phần | Tôi hỏi / nhờ | Nhận được | Kiểm tra |
+### Phần AI làm
+
+| Phần | Tôi hỏi / nhờ | AI đã làm | Kiểm tra |
 |---|---|---|---|
-| Part 6 `app/*.py` | Viết các file Python còn `TODO` theo hợp đồng trong `06-lab-complete/README.md` | Code cho config, auth, redis_client, rate_limiter, cost_guard, main | AI chạy thử bằng `fakeredis` và `TestClient`: 12 tình huống (health, ready, 401, 429, 402, Redis chết, log JSON) đều đúng. `check_production_ready.py --static-only` đạt các mục thuộc code. ⏳ BẠN ĐIỀN: bạn đã tự đọc hiểu từng hàm và chạy bản đầy đủ trong WSL2 chưa |
-| Part 1, 4 | Chạy thử các bản develop/production và tổng hợp output | Output `curl` ở trên (AI tự chạy trên máy này, dùng cổng khác 8000 vì cổng 8000 đã bị chiếm) | Số liệu là output thật của lệnh đã chạy |
-| Part 2, 3, 5 | Đọc Dockerfile, compose, `cloudbuild.yaml`, mã nguồn và viết câu trả lời | Phần giải thích bằng chữ | Đã đối chiếu với file; các số đo cần Docker để trống cho tôi tự đo |
-| Part 7 | Chạy benchmark local và tổng hợp | Xem `BENCHMARK_REPORT.md` | Số trong báo cáo lấy từ các file JSON trong `reports/` |
+| Part 6 `06-lab-complete/app/*.py`, `.env.example` | Viết các file Python còn `TODO` theo hợp đồng trong `06-lab-complete/README.md` | Code cho config, auth, redis_client, rate_limiter, cost_guard, main | AI chạy thử bằng `fakeredis` và `TestClient` (12 tình huống: health, ready, 401, 429, 402, Redis chết, log JSON), sau đó chính tôi chạy `python check_production_ready.py` bản đầy đủ trong WSL2 và được `PASS 12/12` |
+| Part 6 `render.yaml` | Viết cấu hình Render | AI viết `render.yaml` (web service Docker, Redis, `generateValue` cho `AGENT_API_KEY`) | Render đọc được file và deploy lên trạng thái Live; tôi chạy 4 lệnh curl ra `200, 200, 401, 200` (`screenshots/test.png`) |
+| Part 1, 4 | Chạy thử các bản develop/production và tổng hợp output | Output `curl` ghi trong các mục tương ứng (AI tự chạy trên máy này, dùng cổng khác 8000 vì cổng 8000 đã bị chiếm) | Số liệu là output thật của lệnh đã chạy |
+| Part 2, 3, 5 | Đọc Dockerfile, compose, `cloudbuild.yaml`, mã nguồn và viết câu trả lời; đo các số cần Docker | Phần giải thích bằng chữ; AI tự chạy các lệnh Docker trong WSL2 (build 2 image Part 2 và đo kích thước, stack Compose Part 2.4, `--scale agent=3` và `test_stateless.py` Part 5, thử SIGTERM Part 5.2) | Đã đối chiếu với file; các số trong Part 2 và Part 5 là output thật của các lệnh đó. Trong lần chạy đầu của `test_stateless.py` có một lỗi 502 chưa rõ nguyên nhân, đã ghi trung thực trong Part 5 |
+| Part 7 | Chạy benchmark local (load test, eval), stack Docker (Locust, alert, trace) và tổng hợp vào báo cáo | Chạy các lệnh, đọc Prometheus/Jaeger API, điền `BENCHMARK_REPORT.md`. AI cũng sửa `06-lab-complete/benchmark-observability/production/Dockerfile` (thêm `ENV PYTHONUSERBASE=/home/agent/.local`) vì bản gốc làm agent crash với `No module named 'uvicorn'` | Số mục 2–3 lấy từ các file JSON trong `reports/`; số mục 4 lấy từ log và API của Prometheus/Jaeger. Mục 5 (scale) **chưa có số đo hợp lệ**: hai lần đo đầu không chạy đúng số instance (`docker compose run` ghi đè `--scale`), đã bỏ và ghi rõ trong báo cáo |
+| Rà soát file của tôi | Xem lại `Dockerfile`, `docker-compose.yml`, `.dockerignore` | AI chỉ ra `__pycache__/` không khớp thư mục con trong `.dockerignore`, cổng compose lệch README, còn khối `TODO` thừa | Tôi đồng ý sửa; AI sửa, build lại image kiểm tra `__pycache__` không còn trong image và `docker compose config` hợp lệ |
 
-Phần tôi tự làm: ⏳ BẠN ĐIỀN (Dockerfile, `.dockerignore`, `docker-compose.yml`, `railway.toml`/`render.yaml`, deploy, các số đo bằng Docker).
+Lỗi của AI trong quá trình làm, đã phát hiện và sửa: một kịch bản điền `MISSION_ANSWERS.md` làm file phình hơn 1800 dòng (đã khôi phục và kiểm tra lại các mục); hai lần đo scale sai (xem trên); một nhận định ban đầu về nguyên nhân log JSON của `01-localhost-vs-production/production` trong Part 1 chỉ là suy đoán và được ghi là "khả dĩ", chưa kiểm chứng.
+
+### Phần tôi tự làm
+
+- **`06-lab-complete/Dockerfile`**: tôi tự gõ và build từng phiên bản (v1 đến v5, từ một stage chạy bằng root đến multi-stage, user non-root, `HEALTHCHECK`, `PORT`, uvicorn là PID 1), theo các bước và đoạn mã mẫu do AI hướng dẫn. Tôi gặp và tự sửa các lỗi: cổng bind (`port is already allocated`), `CMD --port` không khớp cổng map (`Empty reply from server`), mở `0.0.0.0` trong trình duyệt (`ERR_ADDRESS_INVALID`), curl khi container chưa kịp khởi động (mã `000`). Mỗi phiên bản tôi kiểm tra bằng `docker run`, `docker logs`, `curl`, `docker exec whoami`.
+- **`.dockerignore`**: tôi tự viết; AI phát hiện lỗi hai pattern trên một dòng (`.env.* !.env.example`) và tôi sửa thành ba dòng riêng.
+- **`docker-compose.yml`**: tôi viết dựa trên khung AI đưa (service `agent` và `redis`, `env_file` với `required: false`, `REDIS_URL`, `depends_on` với `service_healthy`), tạo file `.env` cục bộ với `AGENT_API_KEY` (đã `.gitignore`), và tự kiểm tra `200, 200, 401, 200` cùng cặp `/health` 200, `/ready` 503 khi dừng Redis.
+- **Deploy**: tôi tự tạo Blueprint trên Render, push code, lấy `AGENT_API_KEY` từ dashboard, chạy 4 lệnh curl, và chụp ảnh `dashboard.png`, `running.png`, `test.png`.
+- **Part 7 Bước 2**: tôi tự chụp 4 ảnh `grafana-dashboard.png`, `jaeger-slow-trace.png`, `jaeger-error-trace.png`, `prometheus-alert-firing.png` trên Grafana, Jaeger, Prometheus khi stack đang có tải.
+- **`check_production_ready.py`**: tôi chạy trong WSL2 và được `PASS 12/12`.
