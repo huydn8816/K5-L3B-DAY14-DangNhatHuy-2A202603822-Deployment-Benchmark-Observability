@@ -3,7 +3,7 @@
 > Copy file này thành `BENCHMARK_REPORT.md` trong repo của bạn và điền đầy đủ.
 > Mọi con số phải lấy từ report JSON / CSV / screenshot thật, không ước lượng.
 
-**Họ tên:** ⏳ BẠN ĐIỀN
+**Họ tên:** Đặng Nhật Huy
 **Ngày chạy:** 2026-11-26 (mục 2–4). Mục 5: chưa có số đo hợp lệ, xem giải thích ở mục 5.
 **Môi trường:** Mục 2–3: Windows 10, 8 logical CPU, Python 3.14, agent và load test chạy cùng một máy (không dùng Docker). Mục 4: WSL2 + Docker 29.10.1 (stack `production/`, mỗi agent giới hạn 0.5 CPU / 256 MB theo `docker-compose.yml`); tài nguyên Docker Desktop: ⏳ BẠN ĐIỀN
 
