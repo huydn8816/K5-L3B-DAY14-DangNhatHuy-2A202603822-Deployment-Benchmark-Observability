@@ -308,11 +308,26 @@ Một số số đo từ lần chạy này: image `06-lab-complete` là **297 MB
 
 ## AI log
 
-Theo `RULES.md` mục 1, đây là phần ghi lại việc dùng AI (Claude Code) trong bài này.
+Theo `RULES.md` mục 1, đây là phần ghi lại việc dùng AI (Claude Code) trong bài này: hỏi gì, nhận gì, ai kiểm tra thế nào.
 
-| Phần | Tôi hỏi / nhờ | Nhận được | Kiểm tra |
+### Phần AI làm
+
+| Phần | Tôi hỏi / nhờ | AI đã làm | Kiểm tra |
 |---|---|---|---|
-| Part 6 `app/*.py` | Viết các file Python còn `TODO` theo hợp đồng trong `06-lab-complete/README.md` | Code cho config, auth, redis_client, rate_limiter, cost_guard, main | AI chạy thử bằng `fakeredis` và `TestClient`: 12 tình huống (health, ready, 401, 429, 402, Redis chết, log JSON) đều đúng. `check_production_ready.py --static-only` đạt các mục thuộc code.
-| Part 1, 4 | Chạy thử các bản develop/production và tổng hợp output | Output `curl` ở trên (AI tự chạy trên máy này, dùng cổng khác 8000 vì cổng 8000 đã bị chiếm) | Số liệu là output thật của lệnh đã chạy |
-| Part 2, 3, 5 | Đọc Dockerfile, compose, `cloudbuild.yaml`, mã nguồn và viết câu trả lời | Phần giải thích bằng chữ; AI cũng tự chạy các lệnh Docker trong WSL2 (build 2 image Part 2 và đo kích thước, stack Compose Part 2.4, `--scale agent=3` và `test_stateless.py` Part 5, thử SIGTERM Part 5.2) | Đã đối chiếu với file; các số trong Part 2 và Part 5 là output thật của các lệnh đó, tôi có thể chạy lại để kiểm tra |
-| Part 7 | Chạy benchmark local (load test, eval) và stack Docker (Locust, alert, trace) rồi tổng hợp vào báo cáo | Xem `BENCHMARK_REPORT.md`. AI cũng sửa `06-lab-complete/benchmark-observability/production/Dockerfile` (thêm `ENV PYTHONUSERBASE=/home/agent/.local`) vì bản gốc làm agent crash với `No module named 'uvicorn'` | Số mục 2–3 lấy từ các file JSON trong `reports/`; số mục 4 lấy từ log và API của Prometheus/Jaeger khi chạy. Mục 5 (scale) **chưa có số đo hợp lệ**, báo cáo nêu rõ lý do và cách đo lại |
+| Part 6 `06-lab-complete/app/*.py`, `.env.example` | Viết các file Python còn `TODO` theo hợp đồng trong `06-lab-complete/README.md` | Code cho config, auth, redis_client, rate_limiter, cost_guard, main | AI chạy thử bằng `fakeredis` và `TestClient` (12 tình huống: health, ready, 401, 429, 402, Redis chết, log JSON), sau đó chính tôi chạy `python check_production_ready.py` bản đầy đủ trong WSL2 và được `PASS 12/12` |
+| Part 6 `render.yaml` | Viết cấu hình Render | AI viết `render.yaml` (web service Docker, Redis, `generateValue` cho `AGENT_API_KEY`) | Render đọc được file và deploy lên trạng thái Live; tôi chạy 4 lệnh curl ra `200, 200, 401, 200` (`screenshots/test.png`) |
+| Part 1, 4 | Chạy thử các bản develop/production và tổng hợp output | Output `curl` ghi trong các mục tương ứng (AI tự chạy trên máy này, dùng cổng khác 8000 vì cổng 8000 đã bị chiếm) | Số liệu là output thật của lệnh đã chạy |
+| Part 2, 3, 5 | Đọc Dockerfile, compose, `cloudbuild.yaml`, mã nguồn và viết câu trả lời; đo các số cần Docker | Phần giải thích bằng chữ; AI tự chạy các lệnh Docker trong WSL2 (build 2 image Part 2 và đo kích thước, stack Compose Part 2.4, `--scale agent=3` và `test_stateless.py` Part 5, thử SIGTERM Part 5.2) | Đã đối chiếu với file; các số trong Part 2 và Part 5 là output thật của các lệnh đó. Trong lần chạy đầu của `test_stateless.py` có một lỗi 502 chưa rõ nguyên nhân, đã ghi trung thực trong Part 5 |
+| Part 7 | Chạy benchmark local (load test, eval), stack Docker (Locust, alert, trace) và tổng hợp vào báo cáo | Chạy các lệnh, đọc Prometheus/Jaeger API, điền `BENCHMARK_REPORT.md`. AI cũng sửa `06-lab-complete/benchmark-observability/production/Dockerfile` (thêm `ENV PYTHONUSERBASE=/home/agent/.local`) vì bản gốc làm agent crash với `No module named 'uvicorn'` | Số mục 2–3 lấy từ các file JSON trong `reports/`; số mục 4 lấy từ log và API của Prometheus/Jaeger. Mục 5 (scale) **chưa có số đo hợp lệ**: hai lần đo đầu không chạy đúng số instance (`docker compose run` ghi đè `--scale`), đã bỏ và ghi rõ trong báo cáo |
+| Rà soát file của tôi | Xem lại `Dockerfile`, `docker-compose.yml`, `.dockerignore` | AI chỉ ra `__pycache__/` không khớp thư mục con trong `.dockerignore`, cổng compose lệch README, còn khối `TODO` thừa | Tôi đồng ý sửa; AI sửa, build lại image kiểm tra `__pycache__` không còn trong image và `docker compose config` hợp lệ |
+
+Lỗi của AI trong quá trình làm, đã phát hiện và sửa: một kịch bản điền `MISSION_ANSWERS.md` làm file phình hơn 1800 dòng (đã khôi phục và kiểm tra lại các mục); hai lần đo scale sai (xem trên); một nhận định ban đầu về nguyên nhân log JSON của `01-localhost-vs-production/production` trong Part 1 chỉ là suy đoán và được ghi là "khả dĩ", chưa kiểm chứng.
+
+### Phần tôi tự làm
+
+- **`06-lab-complete/Dockerfile`**: tôi tự gõ và build từng phiên bản (v1 đến v5, từ một stage chạy bằng root đến multi-stage, user non-root, `HEALTHCHECK`, `PORT`, uvicorn là PID 1), theo các bước và đoạn mã mẫu do AI hướng dẫn. Tôi gặp và tự sửa các lỗi: cổng bind (`port is already allocated`), `CMD --port` không khớp cổng map (`Empty reply from server`), mở `0.0.0.0` trong trình duyệt (`ERR_ADDRESS_INVALID`), curl khi container chưa kịp khởi động (mã `000`). Mỗi phiên bản tôi kiểm tra bằng `docker run`, `docker logs`, `curl`, `docker exec whoami`.
+- **`.dockerignore`**: tôi tự viết; AI phát hiện lỗi hai pattern trên một dòng (`.env.* !.env.example`) và tôi sửa thành ba dòng riêng.
+- **`docker-compose.yml`**: tôi viết dựa trên khung AI đưa (service `agent` và `redis`, `env_file` với `required: false`, `REDIS_URL`, `depends_on` với `service_healthy`), tạo file `.env` cục bộ với `AGENT_API_KEY` (đã `.gitignore`), và tự kiểm tra `200, 200, 401, 200` cùng cặp `/health` 200, `/ready` 503 khi dừng Redis.
+- **Deploy**: tôi tự tạo Blueprint trên Render, push code, lấy `AGENT_API_KEY` từ dashboard, chạy 4 lệnh curl, và chụp ảnh `dashboard.png`, `running.png`, `test.png`.
+- **Part 7 Bước 2**: tôi tự chụp 4 ảnh `grafana-dashboard.png`, `jaeger-slow-trace.png`, `jaeger-error-trace.png`, `prometheus-alert-firing.png` trên Grafana, Jaeger, Prometheus khi stack đang có tải.
+- **`check_production_ready.py`**: tôi chạy trong WSL2 và được `PASS 12/12`.
